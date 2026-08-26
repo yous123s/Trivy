@@ -1,0 +1,42 @@
+name: Trivy Security Scan
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  trivy-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Run Trivy scan on nginx
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: nginx:latest
+          format: json
+          output: trivy-report.json
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 0
+
+      - name: Verify Trivy report
+        run: |
+          ls -lh trivy-report.json
+          head -c 500 trivy-report.json
+
+      - name: Upload report to DefectDojo
+        if: always()
+        run: |
+          curl --fail-with-body \
+            -X POST \
+            "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_KEY }}" \
+            -F "scan_type=Trivy" \
+            -F "engagement=${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}" \
+            -F "file=@trivy-report.json"
